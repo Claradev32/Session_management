@@ -1,67 +1,50 @@
-const express = require('express');
-const dotenv = require('dotenv').config()
-const session = require('express-session');
-const redis = require('redis');
-const connectRedis = require('connect-redis');
-const mysql = require('mysql');
-const passport = require('passport');
-const LocalStrategy = require('passport-local/lib').Strategy;
-const bcrypt = require('bcryptjs');
-
+const express = require("express");
+const dotenv = require("dotenv").config();
+const session = require("express-session");
+const connectRedis = require("connect-redis");
+const { createClient } = require("redis");
+const passport = require("passport");
+const router = require("./routes");
+const { passportConfig } = require("./utils/passport");
 
 
 const app = express();
+const PORT = 4300;
 
-
+//app middleware
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.set("view engine", "ejs");
 
-const connection = mysql.createConnection({
-    host: 'localhost',
-    user: 'postgres',
-    password: ''
-});
-connection.connect(function (err) {
-    if (err) {
-        console.error('error connecting: ' + err.stack);
-        return;
-    }
-
-    console.log('connected as id ' + connection.threadId);
-});
-
-const RedisStore = connectRedis(session)
-//Configure redis client
-const redisClient = redis.createClient({
-    host: 'localhost',
-    port: 6379
-})
-redisClient.on('error', function (err) {
-    console.log('Could not establish a connection with redis. ' + err);
-});
-redisClient.on('connect', function (err) {
-    console.log('Connected to redis successfully');
-});
-
-
+//Redis congurations
+const redisClient = createClient({ legacyMode: true });
+redisClient.connect().catch(console.error);
+const RedisStore = connectRedis(session);
 
 //Configure session middleware
 const SESSION_SECRET = process.env.SESSION_SECRET;
 
-app.use(session({
+app.use(
+  session({
     store: new RedisStore({ client: redisClient }),
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    name: '_sessionStore',
     cookie: {
-        secure: false, // if true only transmit cookie over https
-        httpOnly: false, // if true prevent client side JS from reading the cookie 
-        maxAge: 1000 * 60 * 10 // session max age in miliseconds
-    }
-}))
+      secure: false, // if true only transmit cookie over https
+      httpOnly: false, // if true prevent client side JS from reading the cookie
+      maxAge: 1000 * 60 * 10, // session max age in miliseconds
+    },
+  })
+);
 app.use(passport.initialize());
 app.use(passport.session());
 
-app.listen(4000, () => {
-    console.log("Server started at port 4000")
-})
+passportConfig();
+
+//Router middleware
+app.use(router);
+
+app.listen(PORT, () => {
+  console.log(`Server started at port ${PORT}`);
+});
